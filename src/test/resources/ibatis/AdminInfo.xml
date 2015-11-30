@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>  
+<!DOCTYPE sqlMap        
+    PUBLIC "-//ibatis.apache.org//DTD SQL Map 2.0//EN"        
+    "http://ibatis.apache.org/dtd/sql-map-2.dtd">
+<sqlMap namespace="Test">  
+	<typeAlias alias="AdminInfo" type="org.devefx.mirror.model.AdminInfo" />
+	
+	<resultMap id="AdminInfoResult" class="AdminInfo">
+		<result property="id" column="sys_admin_id" />
+		<result property="username" column="username" />
+		<result property="password" column="password" />
+	</resultMap>
+	
+	<select id="getAdminInfoById" resultMap="AdminInfoResult" parameterClass="int">
+		select sys_admin_id, username, password from t09_sys_admin_info where sys_admin_id = #id#
+	</select>
+</sqlMap>

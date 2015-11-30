@@ -30,4 +30,7 @@ public class SqlMapType {
 			typeMap.put(clazz, type);
 		}
 	}
+	public static String getType(Class<?> type) {
+		return typeMap.get(type);
+	}
 }

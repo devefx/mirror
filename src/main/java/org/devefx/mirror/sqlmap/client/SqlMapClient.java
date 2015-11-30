@@ -22,7 +22,7 @@ import org.devefx.mirror.utils.ReflectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SqlMapClient extends SqlMapType implements SqlMapExecutor {
+public class SqlMapClient implements SqlMapExecutor {
 	private static final String SQL_DELETE_BY_KEY = "DELETE FROM %s WHERE %s = ?";
 	private static final Logger LOGGER = LoggerFactory.getLogger(SqlMapClient.class);
 	private ConfigParser configParser;
@@ -201,7 +201,7 @@ public class SqlMapClient extends SqlMapType implements SqlMapExecutor {
 		return null;
 	}
 	private<T> T extractData(ResultSet rs, Class<T> requiredType) throws SQLException {
-		String type = typeMap.get(requiredType);
+		String type = SqlMapType.getType(requiredType);
 		// base type
 		if (type != null && rs.next()) {
 			
@@ -264,7 +264,7 @@ public class SqlMapClient extends SqlMapType implements SqlMapExecutor {
 		}
 	}
 	private<T> T getColumnValue(ResultSet rs, int index, Class<T> requiredType) {
-		String type = typeMap.get(requiredType);
+		String type = SqlMapType.getType(requiredType);
 		if (type != null) {
 			Class<ResultSet> clazz = ResultSet.class;
 			try {

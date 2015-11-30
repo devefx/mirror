@@ -50,9 +50,11 @@ public class Test4 {
 		Equity equity = sqlMapClient.query(Equity.class, 140);
 		System.out.println(JSON.toJSONString(equity));
 		
-		equity = (Equity) mapClient.queryForObject("getEquityById", 140);
+		equity = sqlMapClient.query("select * from t06_equity where id = ?", Equity.class, 140);
 		System.out.println(JSON.toJSONString(equity));
 		
+		equity = (Equity) mapClient.queryForObject("getEquityById", 140);
+		System.out.println(JSON.toJSONString(equity));
 		
 		Thread thread1 = new Thread(new Runnable() {
 			@Override
@@ -88,6 +90,8 @@ public class Test4 {
 		});
 		thread1.start();
 		thread2.start();
+		
+		
 		
 		System.out.println("\nthe end");
 	}

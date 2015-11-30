@@ -8,8 +8,9 @@
 	<resultMap id="EquityResult" class="Equity">
 		<result property="id" column="id" />
 		<result property="member" column="member_id" select="getMemberById" />
+		<result property="adminInfo" column="audit_id" select="getAdminInfoById" />
 	</resultMap>
 	<select id="getEquityById" resultMap="EquityResult" parameterClass="int">
-		select id, member_id from t06_equity where id = #id#
+		select id, member_id, audit_id from t06_equity where id = #id#
 	</select>
 </sqlMap>

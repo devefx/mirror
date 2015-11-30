@@ -96,7 +96,6 @@ public class ReflectionUtils {
 		return null;
 	}
 	
-	
 	private static Method getMethod(Class<?> clazz, String name, Class<?>... parameterTypes) {
 		try {
 			return clazz.getMethod(name, parameterTypes);

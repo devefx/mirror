@@ -10,4 +10,5 @@
 	
 	<sqlMap resource="ibatis/Member.xml"/>
 	<sqlMap resource="ibatis/Equity.xml"/>
+	<sqlMap resource="ibatis/AdminInfo.xml"/>
 </sqlMapConfig>
