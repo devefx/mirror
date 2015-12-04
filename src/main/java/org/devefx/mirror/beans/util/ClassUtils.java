@@ -47,7 +47,7 @@ public class ClassUtils {
 		});
 		for (File file : files) {
 			if (file.isDirectory()) {
-				findClasses(classes, packageName, packagePath);
+				findClasses(classes, packageName + "." + file.getName(), file.getPath());
 			} else {
 				String className = file.getName();
 				className = className.substring(0, className.length() - 6);

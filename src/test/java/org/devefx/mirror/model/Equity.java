@@ -7,7 +7,7 @@ import org.devefx.mirror.annotation.Table;
 @Table("t06_equity")
 public class Equity {
 	private @Column Integer id;
-	private @Entity("member_id") Member member;
+	private @Entity(value="member_id", lazy=false) Member member;
 	private @Entity("audit_id") AdminInfo adminInfo;
 	
 	public Integer getId() {

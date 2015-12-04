@@ -15,6 +15,7 @@ public @interface SqlExpr {
 	String join() default "";
 	/** foreach */
 	String foreach() default "";
+	String item() default "";
 	/** if */
 	String ifnull() default "";
 	String ifnotnull() default "";

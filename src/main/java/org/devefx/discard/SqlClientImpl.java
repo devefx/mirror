@@ -14,7 +14,6 @@ import org.devefx.mirror.annotation.Column;
 import org.devefx.mirror.annotation.Table;
 import org.devefx.mirror.cache.DatabaseCache;
 import org.devefx.mirror.core.ProxyPreparedStatement;
-import org.devefx.mirror.sqlmap.SqlTypeMap;
 import org.devefx.mirror.utils.ReflectionUtils;
 import org.devefx.mirror.utils.StringUtils;
 import org.slf4j.Logger;

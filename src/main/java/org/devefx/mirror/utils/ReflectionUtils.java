@@ -2,10 +2,13 @@ package org.devefx.mirror.utils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.regex.Pattern;
 
 import org.devefx.mirror.annotation.Column;
-import org.devefx.mirror.sqlmap.SqlTypeMap;
+import org.devefx.mirror.sqlmap.client.SqlMapType;
 
 public class ReflectionUtils {
 	private static final String SET_METHOD_PREFIX = "set";
@@ -25,7 +28,7 @@ public class ReflectionUtils {
 				Field field = clazz.getDeclaredField(name);
 				field.setAccessible(true);
 				try {
-					Object value = SqlTypeMap.convert(values[0], field.getType());
+					Object value = convert(values[0], field.getType());
 					field.set(object, value);
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -75,7 +78,7 @@ public class ReflectionUtils {
 			try {
 				classes = method.getParameterTypes();
 				for (int i = 0; i < values.length; i++) {
-					values[i] = SqlTypeMap.convert(values[i], classes[i]);
+					values[i] = convert(values[i], classes[i]);
 				}
 				method.setAccessible(true);
 				return method.invoke(object, values);
@@ -94,6 +97,36 @@ public class ReflectionUtils {
 			}
 		}
 		return null;
+	}
+	
+	public static Object convert(Object value, Class<?> type) {
+		String name = SqlMapType.getType(type);
+		if (value != null && name != null) {
+			String s = value.toString();
+			if (name.equals("Boolean"))
+				return Boolean.parseBoolean(s);
+			if (name.equals("Byte"))
+				return Byte.parseByte(s);
+			if (name.equals("Short"))
+				return Short.parseShort(s);
+			if (name.equals("Int"))
+				return Integer.parseInt(s);
+			if (name.equals("Long"))
+				return Long.parseLong(s);
+			if (name.equals("Float"))
+				return Float.parseFloat(s);
+			if (name.equals("Double"))
+				return Double.parseDouble(s);
+			if (name.equals("BigDecimal"))
+				return new BigDecimal(s);
+			if (name.equals("String"))
+				return s;
+			if (name.equals("URL"))
+				try {
+					return new URL(s);
+				} catch (MalformedURLException e) { }
+		}
+		return value;
 	}
 	
 	private static Method getMethod(Class<?> clazz, String name, Class<?>... parameterTypes) {

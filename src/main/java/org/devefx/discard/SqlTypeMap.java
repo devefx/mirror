@@ -1,4 +1,4 @@
-package org.devefx.mirror.sqlmap;
+package org.devefx.discard;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;

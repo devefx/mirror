@@ -5,7 +5,6 @@ import java.net.URL;
 import java.sql.SQLException;
 
 import org.devefx.mirror.model.Equity;
-import org.devefx.mirror.model.Member;
 import org.devefx.mirror.sqlmap.client.SqlMapClient;
 import org.devefx.mirror.sqlmap.engine.builder.xml.ConfigParser;
 import org.springframework.core.io.FileSystemResource;
@@ -62,7 +61,7 @@ public class Test4 {
 				long t0 = System.currentTimeMillis();
 				try {
 					for (int i = 0; i < 10000; i++) {
-						Equity equity = sqlMapClient.query(Equity.class, 140);
+						sqlMapClient.query(Equity.class, 140);
 						//sqlMapClient.query(Member.class, 1);
 					}
 				} catch (SQLException e) {
@@ -78,7 +77,7 @@ public class Test4 {
 				long t2 = System.currentTimeMillis();
 				try {
 					for (int i = 0; i < 10000; i++) {
-						Equity equity = (Equity) mapClient.queryForObject("getEquityById", 140);
+						mapClient.queryForObject("getEquityById", 140);
 						//mapClient.queryForObject("getMemberById", 1);
 					}
 				} catch (SQLException e) {

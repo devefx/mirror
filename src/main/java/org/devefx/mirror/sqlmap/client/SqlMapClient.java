@@ -1,36 +1,42 @@
 package org.devefx.mirror.sqlmap.client;
 
-import java.lang.reflect.Method;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
+import org.devefx.mirror.cache.DatabaseCacheCentral;
 import org.devefx.mirror.core.struct.Model;
 import org.devefx.mirror.core.struct.Property;
-import org.devefx.mirror.core.struct.impl.EntityProperty;
 import org.devefx.mirror.core.struct.impl.PrimitiveProperty;
 import org.devefx.mirror.sqlmap.engine.builder.xml.ConfigParser;
 import org.devefx.mirror.utils.ReflectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * SqlMapClient
+ * @author： youqian.yue
+ * @date： 2015-12-4 下午4:48:03
+ */
 public class SqlMapClient implements SqlMapExecutor {
 	private static final String SQL_DELETE_BY_KEY = "DELETE FROM %s WHERE %s = ?";
 	private static final Logger LOGGER = LoggerFactory.getLogger(SqlMapClient.class);
 	private ConfigParser configParser;
+	private DatabaseCacheCentral cacheCentral;
+	private SqlDataUtil dataUtil;
 	private DataSource dataSource;
 	
 	public SqlMapClient(ConfigParser configParser) {
 		this.configParser = configParser;
+		this.dataUtil = new SqlDataUtil(configParser);
 		this.dataSource = this.configParser.getBean("dataSource");
+		this.cacheCentral = new DatabaseCacheCentral(null, this);
 	}
 	public void setDataSource(DataSource dataSource) {
 		this.dataSource = dataSource;
@@ -42,9 +48,10 @@ public class SqlMapClient implements SqlMapExecutor {
 	public <T> T query(Class<T> type, Object key) throws SQLException {
 		Model model = configParser.getModel(type);
 		if (model != null) {
-			T result = query(model.getQuerySql(), type, key);
+			String querySql = model.getQuerySql();
+			T result = query(querySql, type, key);
 			if (result != null) {
-				// TODO set cache
+				cacheCentral.set(model.getToken(key), result);
 			}
 			return result;
 		}
@@ -56,44 +63,54 @@ public class SqlMapClient implements SqlMapExecutor {
 			Class<?> modelClass = object.getClass();
 			Model model = configParser.getModel(modelClass);
 			if (model != null) {
+				String primaryKey = model.getPrimaryKey();
+				Object keyValue = ReflectionUtils.getValue(object, primaryKey);
+				String tokenName = model.getToken(keyValue);
+				Object memory = cacheCentral.get(tokenName, modelClass);
+				
 				List<Object> parameters = new ArrayList<Object>();
 				StringBuffer sql = new StringBuffer("UPDATE ");
 				sql.append(model.getTableName());
 				sql.append(" SET ");
-				Object keyValue = null;
 				boolean isChange = false;
 				Map<String, Property> map = model.getColumnProperty();
 				for (Map.Entry<String, Property> entry : map.entrySet()) {
 					Property property = entry.getValue();
 					if (property instanceof PrimitiveProperty) {
 						String column = entry.getKey();
-						Object value = ReflectionUtils.getValue(object, property.getName());
-						// TODO compare cache
-						if (column.equals(model.getPrimaryKey())) {
-							keyValue = value;
-						} else {
+						if (!column.equals(primaryKey)) {
+							Object value = ReflectionUtils.getValue(object, property.getName());
+							// compare cache
+							if (memory != null) {
+								Object memoryValue = ReflectionUtils.getValue(memory, property.getName());
+								if ((value == null && memoryValue == null) || (value != null && value.equals(memoryValue))
+										|| (memoryValue != null && memoryValue.equals(value))) {
+									continue;
+								}
+							}
 							parameters.add(value);
 							if (isChange)
 								sql.append(", ");
 							sql.append(column);
 							sql.append(" = ?");
+							isChange = true;
 						}
-						isChange = true;
 					}
 				}
 				if (isChange) {
 					parameters.add(keyValue);
 					sql.append(" WHERE ");
-					sql.append(model.getPrimaryKey());
+					sql.append(primaryKey);
 					sql.append(" = ?");
+					boolean result = execute(sql.toString(), parameters) > 0;
+					if (result) {
+						cacheCentral.set(tokenName, object);
+					}
+					return result;
 				}
-				boolean result = execute(sql.toString(), parameters) > 0;
-				if (result) {
-					// TODO update cache
-				}
-				return result;
+			} else {
+				throw new SQLException("");
 			}
-			throw new SQLException("");
 		}
 		return false;
 	}
@@ -109,7 +126,7 @@ public class SqlMapClient implements SqlMapExecutor {
 				boolean result = execute(String.format(SQL_DELETE_BY_KEY, model.getTableName(),
 						model.getPrimaryKey()), key) > 0;
 				if (result) {
-					// TODO update cache
+					cacheCentral.delete(model.getToken(key));
 				}
 				return result;
 			}
@@ -151,17 +168,13 @@ public class SqlMapClient implements SqlMapExecutor {
 				sql.append(fieldSql);
 				sql.append(") VALUES(");
 				sql.append(valueSql);
-				sql.append(")");
-				// output log
-				if (LOGGER.isInfoEnabled()) {
-					LOGGER.info("[sql]{}", sql);
-					LOGGER.info("[parameters]{}", parameters);
+				sql.append(");select @@identity");
+				Integer id = query(sql.toString(), Integer.class, parameters);
+				if (id != null) {
+					ReflectionUtils.setValue(object, model.getPrimaryKey(), id);
+					cacheCentral.set(model.getToken(id), object);
+					return true;
 				}
-				boolean result = execute(sql.toString(), parameters) > 0;
-				if (result) {
-					// TODO update cache
-				}
-				return result;
 			}
 		}
 		return false;
@@ -178,7 +191,11 @@ public class SqlMapClient implements SqlMapExecutor {
 				statement.setObject(i + 1, parameters[i]);
 			}
 			rs = statement.executeQuery();
-			return extractData(rs, type);
+			T data = dataUtil.extractData(rs, type);
+			if (data != null) {
+				// TODO set cache
+			}
+			return data;
 		} finally {
 			closeConnection(conn, rs);
 		}
@@ -186,94 +203,79 @@ public class SqlMapClient implements SqlMapExecutor {
 	@Override
 	public <T> List<T> queryList(String sql, Class<T> type,
 			Object... parameters) throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
+		Connection conn = null;
+		ResultSet rs = null;
+		try {
+			conn = dataSource.getConnection();
+			PreparedStatement statement = conn.prepareStatement(sql);
+			for (int i = 0, n = parameters.length; i < n; i++) {
+				statement.setObject(i + 1, parameters[i]);
+			}
+			rs = statement.executeQuery();
+			List<T> list = new ArrayList<T>(rs.getRow());			
+			T data = null;
+			do {
+				data = dataUtil.extractData(rs, type);
+				if (data != null) {
+					// TODO set cache
+					list.add(data);
+				}
+			} while (data != null);
+			return list;
+		} finally {
+			closeConnection(conn, rs);
+		}
 	}
 	@Override
 	public int execute(String sql, Object... parameters) throws SQLException {
-		// TODO Auto-generated method stub
-		return 0;
+		Connection conn = null;
+		ResultSet rs = null;
+		try {
+			conn = dataSource.getConnection();
+			PreparedStatement statement = conn.prepareStatement(sql);
+			for (int i = 0; i < parameters.length; i++) {
+				statement.setObject(i + 1, parameters[i]);
+			}
+			int result = statement.executeUpdate();
+			if (result != 0) {
+				// TODO update cache
+			}
+			return result;
+		} finally {
+			closeConnection(conn, rs);
+		}
 	}
 	@Override
 	public int[] executeBatch(String sql, Object[]... parameters)
 			throws SQLException {
-		// TODO Auto-generated method stub
-		return null;
-	}
-	private<T> T extractData(ResultSet rs, Class<T> requiredType) throws SQLException {
-		String type = SqlMapType.getType(requiredType);
-		// base type
-		if (type != null && rs.next()) {
-			
-		// map type
-		} else if (Map.class.isAssignableFrom(requiredType) && rs.next()) {
-			
-		} else if (rs.next()) {
-			ResultSetMetaData rsmd = rs.getMetaData();
-			try {
-				T object = requiredType.newInstance();
-				// is data model
-				Model model = configParser.getModel(requiredType);
-				if (model != null) {
-					Map<String, Integer> columnMap = new HashMap<String, Integer>();
-					for (int i = 1, n = rsmd.getColumnCount() + 1; i < n; i++) {
-						String columnName = rsmd.getColumnName(i);
-						String tableName = rsmd.getTableName(i);
-						columnMap.put(tableName + "." + columnName, i);
-					}
-					List<String> closeList = new ArrayList<String>();
-					extractData(object, model, rs, columnMap, closeList);
-					return object;
+		Connection conn = null;
+		ResultSet rs = null;
+		try {
+			conn = dataSource.getConnection();
+			conn.setAutoCommit(false);
+			PreparedStatement statement = conn.prepareStatement(sql);
+			for (Object[] objects : parameters) {
+				for (int i = 0; i < objects.length; i++) {
+					statement.setObject(i + 1, objects[i]);
 				}
-				// not data model
-				return object;
-			} catch (Exception e) {
-				// TODO: handle exception
+				statement.addBatch();
 			}
-		}
-		return null;
-	}
-	private void extractData(Object object, Model model, ResultSet rs, Map<String, Integer> columnMap, List<String> closeList) {
-		Map<String, Property> map = model.getColumnProperty();
-		for (Map.Entry<String, Property> entry : map.entrySet()) {
-			String column = entry.getKey();
-			Property property = entry.getValue();
-			if (property instanceof EntityProperty) {
-				EntityProperty entityProperty = (EntityProperty) property;
-				if (!entityProperty.isCollection()) {
-					Model childModel = entityProperty.getModel();
-					String addr = property.getClass() + "." + property.getName();
-					if (childModel != null && !closeList.contains(addr)) {
-						closeList.add(addr);
-						try {
-							Object childObject = childModel.getModelClass().newInstance();
-							extractData(childObject, childModel, rs, columnMap, closeList);
-							ReflectionUtils.setValue(object, property.getName(), childObject);
-						} catch (Exception e) {
-							e.printStackTrace();
-						}
-					}
-				}
-			} else if (property instanceof PrimitiveProperty) {
-				Integer columnIndex = columnMap.get(model.getTableName() + "." + column);
-				if (columnIndex != null) {
-					Object value = getColumnValue(rs, columnIndex, property.getType());
-					ReflectionUtils.setValue(object, property.getName(), value);
-				}
+			int[] result = statement.executeBatch();
+			conn.commit();
+			conn.setAutoCommit(true);
+			// TODO update cache
+			return result;
+		} catch (SQLException e) {
+			if (!conn.isClosed()) {
+				conn.rollback();
 			}
-		}
-	}
-	private<T> T getColumnValue(ResultSet rs, int index, Class<T> requiredType) {
-		String type = SqlMapType.getType(requiredType);
-		if (type != null) {
-			Class<ResultSet> clazz = ResultSet.class;
-			try {
-				Method method = clazz.getMethod("get" + type, int.class);
-				return (T) method.invoke(rs, index);
-			} catch (Exception e) { }
+			e.printStackTrace();
+		} finally {
+			closeConnection(conn, rs);
 		}
 		return null;
 	}
+	
 	private void closeConnection(Connection conn, ResultSet rs) {
 		try {
 			if (conn != null)
